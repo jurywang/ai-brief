@@ -1,0 +1,76 @@
+import os
+import requests
+from datetime import datetime, timedelta
+import warnings
+
+# 忽略SSL警告
+warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+
+# ========== 配置区域 ==========
+# 从 GitHub Secrets 安全读取 Key
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY") 
+OUTPUT_FILE = "index.html" 
+DISABLE_SSL_VERIFY = True 
+
+def generate_daily_brief():
+    if not DEEPSEEK_API_KEY:
+        print("❌ 错误: 未在环境变量中找到 DEEPSEEK_API_KEY")
+        return
+
+    now = datetime.now()
+    today_str = now.strftime("%Y年%m月%d日")
+    three_days_ago = (now - timedelta(days=3)).strftime("%Y年%m月%d日")
+    
+    prompt = f"""
+    你是一位顶级的UI/UX设计师和科技新闻编辑。请生成从 {three_days_ago} 到 {today_str} 的 AI 行业简报。
+
+    ### 任务要求：
+    1. 汇总过去 72 小时内的全球 AI 动态（重点关注主流厂商及模型发布）。
+    2. **链接可靠性**：每个卡片必须包含真实来源 URL。若无长链接，请链接至该媒体官网。
+    3. **明文显示来源**：卡片底部必须标注 "来源：[媒体名称]"。
+
+    ### 设计风格：
+    - **背景**：纯白色 (#FFFFFF)；**字体**：Poppins。
+    - **视觉**：蓝色到紫色的渐变渐变标题。
+    - **交互**：卡片带柔和阴影，悬停时向上位移并轻微放大。
+    - **结构**：核心焦点(3条)、技术动态、商业市场、战略启示。
+    """
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+    
+    data = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "你是一位专注于视觉体验的 HTML 代码生成器。直接输出代码，不包含 Markdown 标记。"},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.3
+    }
+    
+    try:
+        print(f"🚀 正在整理 72 小时内动态...")
+        response = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=120,
+            verify=not DISABLE_SSL_VERIFY
+        )
+        response.raise_for_status()
+        html_content = response.json()['choices'][0]['message']['content']
+        
+        # 自动清洗 Markdown 标签
+        html_content = html_content.replace('```html', '').replace('```', '').strip()
+        
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        print(f"✅ index.html 生成成功！")
+        
+    except Exception as e:
+        print(f"❌ 运行失败: {e}")
+
+if __name__ == "__main__":
+    generate_daily_brief()
